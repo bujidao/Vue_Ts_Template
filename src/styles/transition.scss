@@ -1,0 +1,86 @@
+/* ========== style1 ========== */
+/* fade */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.28s;
+}
+
+.fade-enter,
+.fade-leave-active {
+  opacity: 0;
+}
+
+/* fade-transform */
+.fade-transform-leave-active,
+.fade-transform-enter-active {
+  transition: all .3s;
+}
+
+.fade-transform-enter {
+  opacity: 0;
+  transform: translateX(-30px);
+}
+
+.fade-transform-leave-to {
+  opacity: 0;
+  transform: translateX(30px);
+}
+
+
+
+
+/* ========== style2 ========== */
+/* fade-vertical */
+.fade-v-enter-active,
+.fade-v-leave-active {
+  transition: opacity 0.28s;
+}
+
+.fade-v-enter,
+.fade-v-leave-active {
+  opacity: 0;
+}
+
+/* fade-transform */
+.fade-v-transform-leave-active,
+.fade-v-transform-enter-active {
+  transition: all .3s;
+}
+
+.fade-v-transform-enter {
+  opacity: 0;
+  transform: translateY(-30px);
+}
+
+.fade-v-transform-leave-to {
+  opacity: 0;
+  transform: translateY(30px);
+}
+
+/* ========== style3 ========== */
+/* fade-vertical */
+.fade-rtl-enter-active,
+.fade-rtl-leave-active {
+  transition: opacity 0.28s;
+}
+
+.fade-rtl-enter,
+.fade-rtl-leave-active {
+  opacity: 0;
+}
+
+/* fade-transform */
+.fade-rtl-transform-leave-active,
+.fade-rtl-transform-enter-active {
+  transition: all .3s;
+}
+
+.fade-rtl-transform-enter {
+  opacity: 0;
+  transform: translateX(30px);
+}
+
+.fade-rtl-transform-leave-to {
+  opacity: 0;
+  transform: translateX(-30px);
+}

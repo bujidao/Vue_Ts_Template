@@ -1,0 +1,1470 @@
+/*
+ * @Description  : 智慧导诊平台
+ * @Author       : Alex Ceng
+ * @Date         : 2020-07-16 14:14:15
+ * @LastEditors  : Alex Ceng
+ * @LastEditTime : 2021-03-05 17:41:59
+ * @Group        : leenleda.com
+ */
+
+var $: any;
+var PinyinMatch: any
+
+/**
+ * html dom
+ */
+interface HTMLDom extends HTMLDocument {
+  offsetWidth?: number
+  offsetHeight?: number
+  style?: any
+}
+
+/**
+ * 自定义key, value 绑定
+ * { [key: string]: any }
+ */
+interface MyMap {
+  [key: string]: any
+}
+
+const config: MyMap = {
+  // 页面标题
+  pageTitle: '智慧导诊',
+
+  // 身体部位base api
+  baseUrl: "../dist/json/",
+  // 疾病病例库 api
+  // baseApiUrl: 'http://lf.xiaomy.net/',
+  baseApiUrl: 'http://192.168.1.54:8080/',
+
+  // logo地址
+  logoUrl: '',
+
+  // 显示比例
+  displayRadio: 1,
+
+  // 模型数据配置
+  modelData: [
+    {
+      label: '男人',
+      adult: true,
+      value: 'man',
+      modelUrl: {
+        positive: './img/man.png',
+        reverse: './img/man-reverse.png'
+      },
+      bodyPartsUrl: {
+        positive: '../json/bodyParts/man.json',
+        reverse: '../json/bodyParts/man-reverse.json'
+      }
+    },
+    {
+      label: '女人',
+      adult: true,
+      value: 'woman',
+      modelUrl: {
+        positive: './img/woman.png',
+        reverse: './img/woman-reverse.png'
+      },
+      bodyPartsUrl: {
+        positive: '../json/bodyParts/woman.json',
+        reverse: '../json/bodyParts/woman-reverse.json'
+      }
+    },
+    {
+      label: '男孩',
+      adult: false,
+      value: 'boy',
+      modelUrl: {
+        positive: './img/boy.png',
+        reverse: './img/boy-reverse.png'
+      },
+      bodyPartsUrl: {
+        positive: '../json/bodyParts/boy.json',
+        reverse: '../json/bodyParts/boy-reverse.json'
+      }
+    },
+    {
+      label: '女孩',
+      adult: false,
+      value: 'girl',
+      modelUrl: {
+        positive: './img/girl.png',
+        reverse: './img/girl-reverse.png'
+      },
+      bodyPartsUrl: {
+        positive: '../json/bodyParts/girl.json',
+        reverse: '../json/bodyParts/girl-reverse.json'
+      }
+    }
+  ],
+
+  pageDom: {
+    // 主要操作区域 --- 渲染人物模型 
+    mainId: 'main',
+
+    // 时间显示的区域 --- 设置时间，默认显示格式是  hh:MM
+    timeId: 'time',
+
+    // logo显示区域 --- 设置logo
+    logoId: 'logo',
+
+    // 正反面切换id
+    reverseId: 'reverse',
+
+    // 人类型选择id (男人 女人)
+    humanTypeId: 'humanType',
+
+    isAdultId: 'isAdult',
+
+    // 综合类按钮id
+    comprehensiveId: 'comprehensive',
+
+    // 皮肤按钮id
+    skinId: 'skin',
+
+    // 弹窗筛选id
+    filterId: "myFilter",
+
+    // 弹窗标题
+    dialogTitleId: 'dialog_title',
+
+    // 查询结果以及建议弹窗
+    myAlertId: 'myalert',
+
+    // 医生列表
+    docContainerID: 'docContainer',
+
+    // 查询结果
+    resDId: 'resD',
+
+    // 查询结果
+    curSId: 'curS'
+  }
+}
+
+const global: MyMap = {
+  // 身体部位列表
+  bodyPartsPointList: Array,
+
+  // 当前模型： 男人女人孩子 default: man
+  currentModel: {},
+
+  // 是否是成人 true 成人 false 小孩
+  isAdult: true,
+  
+  // 性别 1 男 2 女
+  sex: 1,
+
+  // 是否是正面  true: 正面 false: 反面
+  isPositive: true,
+
+  // 当前标注点位的身体部位列表
+  currentMarkPointPartsList: [],
+
+  // 症状列表
+  diseaseList: [],
+
+  // dialog 堆栈
+  dialogStack: [],
+
+  // 弹窗列表
+  dialogList: [],
+
+  // alert列表
+  alertList: [],
+
+  // 身体部位列表
+  bodyPartsUrl: ''
+}
+
+/**
+ * 主题色管理
+ */
+enum Color {
+  ThemeDeepBlue = 'rgba(30, 112, 212, 1)',
+  ThemeLightBlue = 'rgba(30, 112, 212, 0.4)',
+  ThemeLinkBlue = '#1473e6',
+  ThemeDeepGray = '#4a4a4a'
+}
+
+/**
+ * 初始化项目
+ */
+class init {
+  readonly imgUrl: string
+  readonly targetDom: any
+  private zoomRadio: number
+
+  constructor() {
+    if (typeof Object.assign != 'function') {
+      Object.assign = function(target) {
+        'use strict';
+        if (target == null) {
+          throw new TypeError('Cannot convert undefined or null to object');
+        }
+        target = Object(target);
+        for (var index = 1; index < arguments.length; index++) {
+          var source = arguments[index];
+          if (source != null) {
+            for (var key in source) {
+              if (Object.prototype.hasOwnProperty.call(source, key)) {
+                target[key] = source[key];
+              }
+            }
+          }
+        }
+        return target;
+      };
+    }
+    this.targetDom = document.getElementById(config.pageDom.mainId)
+    if (isNull(global.currentModel)) {
+      global.currentModel = config.modelData[0]
+    }
+    this.imgUrl = global.isPositive ? global.currentModel.modelUrl.positive : global.currentModel.modelUrl.reverse
+    global.bodyPartsUrl = global.isPositive ? global.currentModel.bodyPartsUrl.positive : global.currentModel.bodyPartsUrl.reverse
+
+    config.displayRadio = this.targetDom.style.zoom || 1.0
+
+    // 监听人物模型 --- 正反面点击事件
+    document.getElementById(config.pageDom.reverseId).onclick = (e) => {
+      ListenPageEvent.setCurrentModel(e, 'reverse')
+    }
+
+    // 监听人物模型 --- 男人女人点击事件
+    document.getElementById(config.pageDom.humanTypeId).onclick = (e) => {
+      ListenPageEvent.setCurrentModel(e, 'humanType')
+    }
+
+    // 监听人物模型 --- 成人小孩点击点击事件
+    document.getElementById(config.pageDom.isAdultId).onclick = (e) => {
+      ListenPageEvent.setCurrentModel(e, 'isAdult')
+    }
+
+    // 监听综合按钮点击
+    document.getElementById(config.pageDom.comprehensiveId).onclick = (e) => {
+      ListenPageEvent.handleComprehensiveClick(e)
+    }
+
+    // 监听皮肤按钮点击
+    document.getElementById(config.pageDom.skinId).onclick = (e) => {
+      ListenPageEvent.handleSkinClick(e)
+    }
+    // handleSkinClick
+    // 加载背景人物图片
+    this.loadImg()
+
+    // 加载页面数据
+    this.loadingData()
+    // new DialogController(true, 'disease')
+
+  }
+
+  private test() {
+  }
+
+  /**
+   * 加载数据
+   */
+  private loadingData() {
+    const params = {
+      key: global.bodyPartsUrl
+    }
+    LoadData.getAllMarkedPoint(params, (res: any) => {
+      global.bodyPartsPointList = res.data
+      this.drawPoint(res.data)
+    })
+  }
+
+  /**
+   * 加载人物图片
+   * 获取图片比例
+   * 根据图片比例， 计算坐标点位位置
+   */
+  private loadImg() {
+    const img = new Image();
+    img.src = this.imgUrl;
+    img.onload = () => {
+      const imgRadio = img.width / img.height
+      const domRadio = this.targetDom.offsetWidth / this.targetDom.offsetHeight
+      this.targetDom.style.backgroundImage = `url(${this.imgUrl})`
+      let bgSize
+      if (domRadio > imgRadio) {
+        bgSize = 'contain'
+        this.zoomRadio = imgRadio
+      } else {
+        bgSize = 'cover'
+        this.zoomRadio = domRadio
+      }
+      this.targetDom.style.backgroundSize = bgSize
+    }
+  }
+
+  /**
+   * 将点位渲染到页面
+   */
+  private drawPoint(bodyPartsPointList: any) {
+    const tmpDom = document.getElementById(config.pageDom.mainId)
+    if (!tmpDom) {
+      console.error('标签ID配置错误：请对主要显示区域的ID进行正确配置')
+      return
+    }
+    if (tmpDom.innerHTML) tmpDom.innerHTML = ''
+    for (let i in bodyPartsPointList) {
+      new Point(tmpDom, bodyPartsPointList[i])
+    }
+  }
+
+  /**
+   * 渲染页面当前时间
+   */
+  private setPageCurrentTime() {
+    const tmpDom = document.getElementById(config.pageDom.timeId)
+    if (!tmpDom) {
+      // console.error('标签ID配置错误：请对时间显示区域的ID进行正确配置')
+      return
+    }
+    new SetTime(tmpDom)
+  }
+
+  /**
+   * 配置logo
+   */
+  private renderLogo() {
+    const tmpDom = document.getElementById(config.pageDom.logoId)
+    if (!tmpDom) {
+      // console.error('标签ID配置错误：请对logo显示区域的ID进行正确配置')
+      return
+    }
+    tmpDom.style.backgroundImage = 'url(' + config.logoUrl + ')'
+  }
+
+  /**
+   * 渲染页面标题
+   */
+  private setPageTitle() {
+    document.title = config.pageTitle
+    document.getElementById('pageTitle').innerText = config.pageTitle
+  }
+
+  /**
+   * 渲染公共区域
+   */
+  public render() {
+
+    // 设置logo
+    this.renderLogo()
+
+    // 渲染
+    this.setPageCurrentTime()
+
+    // 设置页面title
+    this.setPageTitle()
+  }
+}
+
+interface PointItem {
+  x: number,
+  y: number,
+  xLen: number,
+  yLen: number,
+  label: string,
+  rotate: number
+}
+
+/**
+ * 标注点位
+ */
+class Point {
+  private label: string
+  private newDom: HTMLElement
+  private mainDom: HTMLElement
+  private pointInfo: PointItem
+
+  constructor(mainDom: HTMLElement, ...params: any) {
+    this.mainDom = mainDom
+    this.label = params[0].label || ''
+    this.pointInfo = params[0] || {}
+    this._init()
+  }
+
+  private _init() {
+    if (!isNull(this.pointInfo)) {
+      this.drawArea(this.pointInfo)
+    }
+  }
+
+  // 设置点位位置和样式区域
+  private drawArea(point: PointItem) {
+    this.newDom = document.createElement('div')
+    const styleList: MyMap = {
+      position: 'absolute',
+      left: (point.x - point.xLen / 2 ) + (1 - config.displayRadio)/2 * document.body.offsetWidth + 'px',
+      top: (point.y - point.yLen / 2) + 'px',
+      width: point.xLen + 'px',
+      height: point.yLen + 'px',
+      // border: '1px solid red',
+      fontSize: 12 + 'px',
+      color: '#fff',
+      fontWeight: 600,
+      whiteSpace: 'nowrap',
+      textAlign: 'center',
+      lineHeight: point.yLen + 'px',
+      transform: `rotate(${point.rotate}deg)`
+    }
+    Object.keys(styleList).map((ele: any) => {
+      this.newDom.style[ele] = styleList[ele]
+    })
+    // let randStr = Tools.randomString(6, false)
+    // this.newDom.className = randStr
+    // document.styleSheets[0].insertRule(`.${randStr}:after {
+    //   content: '${point.label}';
+    //   position: absolute;
+    //   left: 0;
+    //   top: 0;
+    //   height: 20px;
+    //   line-height: 20px;
+    //   display: inline-block;
+    //   color: red;
+    //   border: 1px solid red;
+    // }`, 0);
+    this.newDom.onclick = () => {
+      this.click(point)
+    }
+    this.mainDom.appendChild(this.newDom)
+  }
+
+  private click(point: MyMap) {
+    // new ToggleMenu(true, pointData)
+    if (point.disease) {
+      let params = {
+        key: point.disease
+      }
+      LoadData.getBodyPartsByClientArea(params, (res: any) => {
+        new DialogController(true, 'bodyParts')
+      })
+    }
+  }
+}
+
+/**
+ * 暂时未启用
+ */
+class ToggleMenu {
+  private isShowMenu: boolean
+  private menuData: any
+
+  // 菜单目录临时缓存界面
+  private menuHtml: string
+
+  // 目标dom
+  private targetDom: any
+  private targetDomWidth: number
+
+  // 速度控制
+  readonly speed: number = 1000 / 60
+  readonly speedSpan: number = 10
+
+  // 定时器
+  private timer: any
+
+  constructor(isShowMenu: boolean, menuData?: any) {
+    this.isShowMenu = isShowMenu
+    this.menuData = menuData
+    this.targetDom = document.getElementsByClassName('sideMenu')[0]
+    this.targetDomWidth = parseInt(getDomStyle(this.targetDom).width)
+    if (!isShowMenu) {
+      this.hide()
+    } else {
+      this.show()
+    }
+
+  }
+
+  /**
+   * 显示菜单
+   */
+  private show() {
+    this.targetDom.style.right = -this.targetDomWidth + 'px'
+    this.toggle(true)
+  }
+
+  /**
+   * 隐藏菜单
+   */
+  public hide() {
+    this.targetDom.style.right = 0 + 'px'
+    this.toggle(false)
+  }
+
+  /**
+   * 切换侧边栏
+   * @param flag true: 显示 false隐藏
+   */
+  private toggle(flag: boolean) {
+    let tmpFlag = flag ? 1 : -1
+    const right = parseInt(getDomStyle(this.targetDom).right)
+    this.targetDom.style.right = right + this.speedSpan * tmpFlag + 'px'
+    if (right < -this.targetDomWidth || right < 0) {
+      this.timer = setTimeout(() => {
+        this.toggle(flag)
+      }, this.speed)
+    }
+  }
+}
+
+/**
+ * 设置当前时间
+ */
+class SetTime {
+  private targetDom: any
+  private currTime: string = "00:00"
+  private timer: any
+
+  constructor(targetDom: any) {
+    this.targetDom = targetDom
+    this._init()
+  }
+
+  private _init() {
+    this.targetDom.innerHTML = this.currTime
+    clearInterval(this.timer)
+    this.timer = setInterval(() => {
+      this.refreshTime()
+    }, 1000)
+  }
+
+  private refreshTime() {
+    let time = new Date()
+    let h = time.getHours()
+    let m = time.getMinutes()
+    this.currTime = addZero(h) + ':' + addZero(m)
+    this.targetDom.innerHTML = this.currTime
+  }
+}
+
+/**
+ * =====历史记录 start=====
+ */
+class HistoryEvent {
+  constructor() {
+    this._init()
+  }
+
+  private _init() {
+    let prevDom = document.getElementById('prev')
+    if(global.dialogStack.length <= 0) {
+      prevDom.style.display = 'none'
+    } else {
+      prevDom.style.display = 'block'
+    }
+  }
+  
+  /**
+   * 设置历史记录
+   * @param params 参数
+   */
+  public push(params: any) {
+    this._init()
+    global.dialogStack.push(params)
+  }
+
+  public pop() {
+    let tmp = global.dialogStack.pop()
+    this._init()
+    return tmp
+  }
+
+  public clear() {
+    global.dialogStack.length = 0
+    this._init()
+  }
+}
+/**
+ * =====历史记录 end=====
+ */
+
+/**
+ * ===== 切换显示dialog start =====
+ */
+class DialogController {
+  private template: any
+  private dialogTitleDom: any
+  constructor(showDialog: boolean, template?: string) {
+    this.template = template
+    this.dialogTitleDom = document.getElementById(config.pageDom.dialogTitleId)
+
+    let his = new HistoryEvent()
+    his.clear()
+
+    // 关闭事件监听
+    document.getElementById('close').onclick = () => {
+      this.close()
+    }
+
+    // 上一页事件监听
+    document.getElementById('prev').onclick = () => {
+      // this.prev()
+    }
+
+    // 绑定筛选事件
+    // this.bindFilterEvent()
+
+    this.render(template)
+    this.toggleDialog(showDialog)
+  }
+
+  // 页面筛选事件
+  // private bindFilterEvent = () => {
+  //   const handleDom:any = document.getElementById(config.pageDom.filterId)
+  //   handleDom.value = ''
+  //   let filterList = Array
+  //   handleDom.onkeyup = () => {
+  //     filterList = global.dialogList.filter((el: any) => {
+  //       let value = handleDom.value
+  //       let match = el.name
+  //       if (PinyinMatch.match(match, value).length > 0) {
+  //         return true
+  //       }
+  //     })
+  //     this.render(this.template, filterList)
+  //   }
+  // }
+
+  /**
+   * 渲染页面 渲染主题
+   * @param template 渲染页面
+   * @param filterList 
+   */
+  public render(template?: string, filterList?: any) {
+    let dialog_body = document.getElementById("body-list")
+    let data: any
+
+    dialog_body.innerHTML = ''
+    if (!isNull(filterList)) {
+      data = filterList
+    } else {
+      // data = global.diseaseList
+      data = global.dialogList
+      let his = new HistoryEvent()
+      his.push(data)
+    }
+
+    // debugger
+    if (data[0].percent) {
+      template = 'subDisease'
+    }
+    
+    switch (template) {
+      case 'bodyParts':
+        data.forEach((el: any) => {
+          dialog_body.appendChild(this.bodyPartTemplate(el))
+        })
+        break
+      case 'disease':
+        data.forEach((el: any) => {
+          dialog_body.appendChild(this.diseaseTemplate(el))
+        })
+        break
+      case 'subDisease':
+        data.forEach((el: any) => {
+          dialog_body.appendChild(this.subDiseaseTemplate(el))
+        })
+        break
+      case 'department':
+        // debugger
+        data.forEach((el: any) => {
+          debugger
+        })
+        break
+      default:
+        this.dialogTitleDom.innerHTML = "请触碰与你相似的症状"
+    }
+  }
+
+  /**
+   * 开启关闭dialog
+   * @param showDialog true 打开 false 关闭
+   */
+  private toggleDialog = (showDialog: boolean) => {
+    const dom: any = document.getElementsByClassName('dialog')[0]
+    if (showDialog) {
+      dom.style.display = 'block'
+      document.getElementById('app').style.filter = 'blur(10px)'
+    } else {
+      dom.style.display = 'none'
+      document.getElementById('app').style.filter = 'blur(0px)'
+    }
+    let dialog_filter: any = document.getElementById(config.pageDom.filterId)
+    dialog_filter.focus()
+  }
+
+  /**
+   * 身体部位模板
+   * @param params 
+   */
+  private bodyPartTemplate(params?: any) {
+    this.dialogTitleDom.innerHTML = "请选择身体部位"
+    let newDom = document.createElement('li')
+    // left
+    let leftDom = document.createElement('span')
+    leftDom.style.float = 'left'
+    let leftContent = document.createTextNode(params.name)
+    leftDom.appendChild(leftContent)
+    // right
+    let rightDom = document.createElement('span')
+    rightDom.style.float = 'right'
+    rightDom.style.color = Color.ThemeDeepGray
+    let rightContent = document.createTextNode('详情>>')
+    rightDom.appendChild(rightContent)
+    // wrapper
+    newDom.appendChild(rightDom)
+    newDom.appendChild(leftDom)
+    newDom.className = 'row-item'
+    newDom.onclick = () => {
+      this.getDiseaseListByBodyParts(params)
+    }
+    return newDom
+  }
+
+  /**
+   * 根据身体部位获取症状列表
+   * @param para 参数
+   */
+  private getDiseaseListByBodyParts (params: any) {
+    LoadData.getDiseaseListByBodyParts(params, (res: any) => {
+      this.render('disease')
+    })
+  }
+
+  /**
+   * 症状模板
+   * @param params 参数
+   */
+  private diseaseTemplate(params?: any) {
+    this.dialogTitleDom.innerHTML = "请选择症状"
+    let newDom = document.createElement('li')
+    // left
+    let leftDom = document.createElement('span')
+    leftDom.style.float = 'left'
+    let leftContent = document.createTextNode(params.name)
+    leftDom.appendChild(leftContent)
+    // right
+    let rightDom = document.createElement('span')
+    rightDom.style.float = 'right'
+    rightDom.style.color = Color.ThemeDeepGray
+    let rightContent = document.createTextNode('详情>>')
+    rightDom.appendChild(rightContent)
+    // wrapper
+    newDom.appendChild(rightDom)
+    newDom.appendChild(leftDom)
+    newDom.className = 'row-item'
+    newDom.onclick = () => {
+      this.getSubDiseaseListByDisease(params)
+    }
+    return newDom
+  }
+
+  /**
+   * 根据症状大类获取症状详情
+   * @param para 参数
+   */
+  private getSubDiseaseListByDisease (para: any) {
+    let params = para
+    params.key = para.location
+    LoadData.getSubDiseaseListByDisease(params, (res: any) => {
+      this.render('subDisease')
+    })
+  }
+  
+  /**
+   * 子症状模板
+   * @param params 参数
+   */
+  private subDiseaseTemplate(params?: any) {
+    this.dialogTitleDom.innerHTML = "请选择症状"
+    let newDom = document.createElement('li')
+    // left
+    let leftDom = document.createElement('span')
+    leftDom.style.float = 'left'
+    let leftContent = document.createTextNode(params.name)
+    leftDom.appendChild(leftContent)
+    // right
+    let rightDom = document.createElement('span')
+    rightDom.style.float = 'right'
+    let rightContent = document.createTextNode(params.percent)
+    rightDom.appendChild(rightContent)
+    // wrapper
+    newDom.appendChild(rightDom)
+    newDom.appendChild(leftDom)
+    newDom.className = 'row-item'
+    newDom.onclick = (e) => {
+      document.getElementById(config.pageDom.curSId).innerText = params.name
+      document.getElementById(config.pageDom.resDId).innerHTML = params.location
+      let myAlert = new AlertController()
+      myAlert.open()
+      return
+      LoadData.getDoctorListByDisease(params, (res: any) => {
+        let tmpHtml = ''
+        res.forEach((ele: any) => {
+          const pp = {
+            docName: ele.name,
+            docTitle: ele.title,
+            desc: ele.description || '暂无',
+            docId: ele.doctor_id || 'default'
+          }
+          tmpHtml += this.doctorTemplate(pp)
+        });
+        var aaa = document.getElementById(config.pageDom.docContainerID)
+        aaa.innerHTML = tmpHtml || '暂无推荐医生，请前往护士台咨询'
+      })
+    }
+    return newDom
+  }
+
+  /**
+   * 子症状列表
+   * @param params 
+   */
+  private getDepartmentByDiseaseList(para: MyMap) {
+    const params = {
+      key: para.location
+    }
+    LoadData.getDepartmentByDiseaseList(params, (res: any) => {
+      this.render('diseaseSubDisease')
+    })
+  }
+
+  /**
+   * 医生模板
+   * @param params 参数
+   */
+  private doctorTemplate(params: any) {
+    const tmpHtml = `
+    <li class="doc-item">
+      <div class="avatar" style="background-image: url(./img/avatar/ordered/${params.docId}.jpg);"></div>
+      <div class="info">
+        <div class="main-info">
+          <span class="name">${params.docName}</span>
+          <span class="title">${params.docTitle}</span>
+        </div>
+        <div class="desc">${params.desc}</div>
+      </div>
+    </li>
+    `
+    return tmpHtml
+  }
+  
+  private close (){
+    let his = new HistoryEvent()
+    new DialogController(false)
+  }
+
+  private prev() {
+    let his = new HistoryEvent()
+    let tmp = his.pop()
+    this.render(this.template, tmp)
+  }
+}
+/**
+ * ===== 切换显示dialog end =====
+ */
+
+/**
+ * ===== 查询结果 start =====
+ */
+class AlertController {
+  private params: any
+  private alertDom: any
+  constructor (params?: any) {
+    this.params = params
+    this.alertDom = document.getElementById(config.pageDom.myAlertId)
+    this.alertDom.onclick = (e: any) => {
+      var ev = e || window.event;
+        if(ev && ev.stopPropagation) {
+          //非IE浏览器
+          ev.stopPropagation();
+        } else {
+          //IE浏览器(IE11以下)
+          ev.cancelBubble = true;
+        }
+      this.close()
+    }
+  }
+  // 打开
+  public open() {
+    this.alertDom.style.visibility = 'visible'
+  }
+  // 关闭
+  public close() {
+    this.alertDom.style.visibility = 'hidden'
+  }
+  // 渲染医生列表
+  private renderDocList() {
+    
+  }
+  // 渲染查询建议
+  private renderSuggest() {
+
+  }
+}
+/**
+ * ===== 查询结果 end =====
+ */
+
+/**
+ * =====监听页面点击事件 start=====
+ */
+namespace ListenPageEvent {
+  /**
+   * 捕获页面点击 --- 正反面切换
+   */
+  export const setCurrentModel = (e: any, type: string) => {
+    let tmpDom = toggleStyle(e) || e
+    if (!tmpDom) {
+      return
+    }
+    switch (type) {
+      case 'reverse':
+        global.isPositive = !global.isPositive
+        break;
+      case 'humanType':
+        if (tmpDom.id === 'man') {
+          global.sex = 1
+        } else {
+          global.sex = 2
+        }
+        var aa = config.modelData.filter((ele: any) => {
+          if (global.isAdult && global.sex === 1) {
+            if (ele.value === 'man') {
+              return ele
+            }
+          } else if (global.isAdult && global.sex === 2) {
+            if (ele.value === 'woman') {
+              return ele
+            }
+          } else if (!global.isAdult && global.sex === 1) {
+            if (ele.value === 'boy') {
+              return ele
+            }
+          } else if (!global.isAdult && global.sex === 2) {
+            if (ele.value === 'girl') {
+              return ele
+            }
+          }
+        })
+        global.currentModel = (<any>Object).assign({}, aa)[0]
+        break;
+      case 'isAdult':
+        if (tmpDom.id === 'adult') {
+          global.isAdult = true
+        } else {
+          global.isAdult = false
+        }
+        var aa = config.modelData.filter((ele: any) => {
+          if (global.isAdult && global.sex === 1) {
+            if (ele.value === 'man') {
+              return ele
+            }
+          } else if (global.isAdult && global.sex === 2) {
+            if (ele.value === 'woman') {
+              return ele
+            }
+          } else if (!global.isAdult && global.sex === 1) {
+            if (ele.value === 'boy') {
+              return ele
+            }
+          } else if (!global.isAdult && global.sex === 2) {
+            if (ele.value === 'girl') {
+              return ele
+            }
+          }
+        })
+        global.currentModel = (<any>Object).assign({}, aa)[0]
+        break;
+    }
+    if (global.currentModel) {
+      new init()
+    }
+  }
+
+  /**
+   * 切换当前点中的样式
+   * @param dom 
+   */
+  const toggleStyle = (ev: any) => {
+    if (!ev) {
+      return
+    }
+    var ev = ev || window.event;
+    var target = ev.target || ev.srcElement;
+    let parentNode = target.parentNode
+    let p = parentNode.children
+    for (let i of p) {
+      if (i.className.indexOf('active') !== -1) {
+        i.className = i.className.replace('active', '')
+      }
+    }
+    if (target.nodeName.toLowerCase() === 'li') {
+      target.className = 'active';
+      return target
+    }
+  }
+
+  /**
+   * 综合病症
+   * @param e 
+   */
+  export const handleComprehensiveClick = (e: any) => {
+    const params = {
+      key: 'f_body_disease'
+    }
+    LoadData.getBodyPartsByClientArea(params, (res: any) => {
+      new DialogController(true, 'disease')
+    })
+  }
+
+  /**
+   * 皮肤病症
+   * @param e 
+   */
+  export const handleSkinClick = (e: any) => {
+    const params = {
+      key: 'm_shin_disease'
+    }
+    LoadData.getBodyPartsByClientArea(params, (res: any) => {
+      new DialogController(true, 'disease')
+    })
+  }
+}
+/**
+ * =====监听页面点击事件 end=====
+ */
+
+/**
+ * =====加载数据 api start=====
+ */
+namespace LoadData {
+  /**
+   * 获取所有在页面上手动标注的点位
+   * @param callback 
+   */
+  export const getAllMarkedPoint = (params: any, callback?: Function) => {
+    $.ajax({
+      method: 'get',
+      dataType: 'json',
+      url: config.baseUrl + params.key,
+      async: false,
+      success: (res: any) => {
+        if (!res) {
+          console.error('获取数据失败，请重新尝试')
+          return
+        }
+        if (callback) callback(res)
+        return res
+      },
+      catch: (err: any) => {
+        console.error(err)
+      }
+    })
+  }
+
+  /**
+   * 根据点击区域获取身体部位列表
+   * @param params 
+   * @param callback 
+   */
+  export const getBodyPartsByClientArea = (params: any, callback?: Function) => {
+    // getBodyPartsByClientArea
+    const getBodyPartId = function(callback?: Function) {
+      $.ajax({
+        method: 'get',
+        url: config.baseApiUrl + 'guidanceMenu/loadMenuByRemarks.action?remarks=' + params.key + '.json',
+        async: false,
+        success: (res: any) => {
+          if (res.status !== 200) {
+            MyToast(res.msg)
+            return
+          }
+          const bodyPartId = res.data.id
+          if (!callback) return
+          callback(bodyPartId)
+        },
+        error: (err: any) => {
+          MyToast('获取数据失败')
+        }
+      })
+    }
+    getBodyPartId(function(bodyPartId: [String, Number]) {
+      $.ajax({
+        method: 'get',
+        url: config.baseApiUrl + 'guidanceMenu/loadMenuById.action?id=' + bodyPartId,
+        async: false,
+        success: (res: any) => {
+          if (res.status !== 200) {
+            MyToast(res.msg)
+            return
+          }
+          if (!res) {
+            console.error('获取身体部位失败，请重新尝试')
+            return
+          }
+          const tmpRes: MyMap = {
+            disease: []
+          }
+          if (Tools.isArray(res.data)) {
+            tmpRes.disease = res.data
+          } else {
+            tmpRes.disease.push(res.data)
+          }
+          global.dialogList = tmpRes.disease
+          if (callback) callback(tmpRes)
+          return tmpRes
+        },
+        error: (err: any) => {
+          MyToast('获取数据失败')
+        }
+      })
+    })
+  }
+
+  /**
+   * 根据身体部位获取症状列表
+   * @param params 参数
+   * @param callback 回调
+   */
+  export const getDiseaseListByBodyParts = (params: any, callback?: Function) => {
+    if (params.isparent === 0) {
+      getDepartmentByDiseaseList(params, callback)
+      return
+    }
+    $.ajax({
+      method: 'get',
+      url: config.baseApiUrl + 'guidanceMenu/loadMenuById.action?id=' + params.id,
+      async: false,
+      success: (res: any) => {
+        if (res.status !== 200) {
+          MyToast(res.msg)
+          return
+        }
+        if (!res) {
+          console.error('获取症状失败，请重新尝试')
+          return
+        }
+        global.dialogList = res.data
+        if (callback) callback(res)
+        return res
+      },
+      error: (err: any) => {
+        MyToast('获取数据失败')
+      }
+    })
+  }
+
+  /**
+   * 根据大类症状获取症状小类列表
+   * @param params 
+   * @param callback 
+   */
+  export const getSubDiseaseListByDisease = (params: any, callback?: Function) => {
+    // getSubDiseaseListByDisease
+    if (params.isparent === 0) {
+      getDepartmentByDiseaseList(params, callback)
+      return
+    }
+    $.ajax({
+      method: 'get',
+      url: config.baseApiUrl + 'guidanceMenu/loadMenuById.action?id=' + params.id,
+      async: false,
+      success: (res: any) => {
+        if (res.status !== 200) {
+          MyToast(res.msg)
+          return
+        }
+        if (!res) {
+          console.error('获取症状失败，请重新尝试')
+          alert('获取症状失败，请重新尝试')
+          return
+        }
+        global.dialogList = res.data
+        if (callback) callback(res)
+        return res
+      },
+      error: (err: any) => {
+        MyToast('获取数据失败')
+      }
+    })
+  }
+
+  /**
+   * 根据症状获取科室部门列表
+   * @param params 参数
+   * @param callback 回调
+   */
+  export const getDepartmentByDiseaseList = (params: MyMap, callback?: Function) => {
+    $.ajax({
+      method: 'get',
+      url: config.baseApiUrl + 'guidanceMenu/loadSymptomById.action?id=' + params.id,
+      async: false,
+      success: (res: any) => {
+        if (res.status !== 200) {
+          MyToast(res.msg)
+          return
+        }
+        if (!res) {
+          console.error('获取数据失败，请重新尝试')
+          return
+        }
+        global.dialogList = res.data
+        if (callback) callback(res)
+        return res
+      },
+      error: (err: any) => {
+        MyToast('获取数据失败')
+      }
+    })
+  }
+
+  /**
+   * 根据疾病获取医生列表
+   * @param params 参数
+   * @param callback 回调函数
+   */
+  export const getDoctorListByDisease = (params: MyMap, callback?: Function) => {
+    let para = {
+      dep_name: params.location
+    }
+    $.ajax({
+      method: 'get',
+      url: config.baseUrl + 'doctorList.json',
+      data: para,
+      async: false,
+      success: (res: any) => {
+        if (res.status !== 200) {
+          MyToast(res.msg)
+          return
+        }
+        if (!res) {
+          console.error('获取数据失败，请重新尝试')
+          return
+        }
+        let ttt
+        ttt = res.data.result.filter((ele: any) => {      
+          if (!ele.department) {
+            return false
+          }
+          if (ele.department.indexOf(para.dep_name) > -1) {
+            return true
+          }
+        })
+        if (callback) callback(ttt)
+        // global.alertList = res.disease
+        // if (callback) callback(res.data.result)
+        return res
+      },
+      error: (err: any) => {
+        MyToast('获取数据失败')
+      }
+    })
+  }
+}
+/**
+ * =====加载数据 api end=====
+ */
+
+/**
+ * =====工具函数 start=====
+ */
+/**
+ * 数字补零， 用于当前时间的显示
+ * @param val 传入的数字
+ */
+function addZero(val: number): string {
+  if (val < 10) {
+    return '0' + val
+  }
+  return val.toString()
+}
+
+/**
+ * 获取dom的样式
+ * @param dom 要操作的dom
+ */
+function getDomStyle(dom: HTMLElement) {
+  if (dom instanceof HTMLCollection) {
+    console.error('getDomStyle：获取dom样式错误，只能针对单个dom获取进行操作')
+    return
+  }
+  return window.getComputedStyle(dom)
+}
+
+/**
+ * 判断是否为空
+ * @param obj 需要判断的字段
+ */
+function isNull(obj: any) {
+  // debugger
+  if (typeof obj === 'undefined') {
+    return true
+  } else if (obj instanceof Object) {
+    if (JSON.stringify(obj) === '{}') {
+      return true
+    }
+  } else if (obj instanceof Array) {
+    if (obj.length === 0) {
+      return true
+    }
+  }
+  return false
+}
+
+function stopDefault( e:any ) { 
+  //阻止默认浏览器动作(W3C) 
+  if ( e && e.preventDefault ) 
+      e.preventDefault(); 
+  //IE中阻止函数器默认动作的方式 
+  else 
+      window.event.returnValue = false; 
+  return false; 
+}
+
+/**
+ * 自定义Toast
+ * @param str 
+ */
+function MyToast(str?: any) {
+  var msgw, msgh, bordercolor;
+  msgw = 300;//提示窗口的宽度  
+  msgh = 80;//提示窗口的高度
+  var sWidth, sHeight;
+  //获取当前窗口尺寸  
+  sWidth = document.body.offsetWidth;
+  sHeight = document.body.offsetHeight;
+  //背景div  
+  var bgObj = document.createElement("div");
+  bgObj.setAttribute('id', 'mytoastbgDiv');
+  bgObj.style.position = "absolute";
+  bgObj.style.top = "0";
+  // bgObj.style.background = "red";
+  // bgObj.style.filter = "progid:DXImageTransform.Microsoft.Alpha(style=3,opacity=25,finishOpacity=75";
+  //透明度
+  bgObj.style.opacity = "0.3";
+  bgObj.style.left = "0";
+  bgObj.style.width = sWidth + "px";
+  bgObj.style.height = sHeight + "px";
+  bgObj.style.zIndex = "10000";
+  bgObj.style.boxSizing="border-box";
+  document.body.appendChild(bgObj);
+  //创建提示窗口的div  
+  var msgObj = document.createElement("div")
+  msgObj.setAttribute("id", "mytoastmsgDiv");
+  msgObj.setAttribute("align", "center");
+  msgObj.style.boxSizing="border-box";
+  msgObj.style.background = "#fef0f0";
+  msgObj.style.border = "1px solid " + bordercolor;
+  msgObj.style.border = "1px solid #fbc4c4";
+  //div设置圆角  
+  msgObj.style.setProperty('border-radius', '10px', 'important');
+  msgObj.style.position = "absolute";
+  msgObj.style.left = "50%";
+  msgObj.style.font = "32px/1.6em Verdana, Geneva, Arial, Helvetica, sans-serif";
+  //窗口距离左侧和顶端的距离   
+  msgObj.style.marginLeft = -msgw/2 + 'px';
+  //窗口被卷去的高+（屏幕可用工作区高/2）-150  
+  msgObj.style.top = 200 + "px";
+  msgObj.style.width = msgw + "px";
+  msgObj.style.height = msgh + "px";
+  msgObj.style.textAlign = "center";
+  msgObj.style.lineHeight = msgh + "px";
+  msgObj.style.zIndex = "10001";
+  document.body.appendChild(msgObj);
+  //提示信息  
+  var txt = document.createElement("p");
+  txt.setAttribute("id", "msgTxt");
+  txt.style.margin = "0";
+  txt.innerHTML = str;
+  txt.style.color = "#f56c6c";
+  document.getElementById("mytoastmsgDiv").appendChild(txt);
+  //设置关闭时间  
+  window.setTimeout("closewin()", 5000);
+}
+function closewin() {
+  document.body.removeChild(document.getElementById("mytoastbgDiv"));
+  document.body.removeChild(document.getElementById("mytoastmsgDiv"));
+}
+// setTimeout(() => {
+//   MyToast('toast 测试')
+// } , 1000)
+/**
+ * =====工具函数 end=====
+ */
+
+namespace Tools {
+  /**
+   * 判断两个字符串的相似度
+   * @param s 
+   * @param t 
+   * @param f 
+   */
+  export const similar = (s: string, t: string, f?: number) => {
+    if (!s || !t) {
+      return 0
+    }
+    var l = s.length > t.length ? s.length : t.length
+    var n = s.length
+    var m = t.length
+    var d: any
+    f = f || 3
+    var min = function (a: number, b: number, c: number) {
+      return a < b ? (a < c ? a : c) : (b < c ? b : c)
+    }
+    var i, j, si, tj, cost
+    if (n === 0) return m
+    if (m === 0) return n
+    for (i = 0; i <= n; i++) {
+      d[0][0] = 0
+      d[i][0] = i
+    }
+    for (j = 0; j <= m; j++) {
+      d[0][j] = j
+    }
+    for (i = 1; i <= n; i++) {
+      si = s.charAt(i - 1)
+      for (j = 1; j <= m; j++) {
+        tj = t.charAt(j - 1)
+        if (si === tj) {
+          cost = 0
+        } else {
+          cost = 1
+        }
+        d[i][j] = min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost)
+      }
+    }
+    let res = (1 - d[n][m] / l)
+    return res.toFixed(f)
+  }
+
+  /**
+   * 判断是否是数组
+   * @param obj 
+   */
+  export const isArray = (obj: any) => {
+    return typeof obj == 'object' && obj.constructor == Array
+  }
+
+  export const randomString = (len: number, hasNum = true) => {
+    len = len || 32;
+    var $chars = '';
+    if (hasNum) {
+      $chars = 'ABCDEFGHJKMNPQRSTWXYZabcdefhijkmnprstwxyz1234567890'
+    } else {
+      $chars = 'ABCDEFGHJKMNPQRSTWXYZabcdefhijkmnprstwxyz'
+    }
+    var maxPos = $chars.length;
+    var str = '';
+    for (let i = 0; i < len; i++) {
+      str += $chars.charAt(Math.floor(Math.random() * maxPos));
+    }
+    return str;
+  }
+}
